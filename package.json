@@ -1,8 +1,8 @@
 {
-  "name": "com.ruizhengu.vektor",
+  "name": "com.varenna.stagecraft",
   "version": "0.1.0",
-  "displayName": "Vektor",
-  "description": "Deterministic XR action runtime for Unity PlayMode tests and autonomous XR test agents.",
+  "displayName": "Stagecraft",
+  "description": "Playwright for XR — deterministic PlayMode action runtime and JSON plan runner for Unity XR.",
   "unity": "6000.0",
   "author": {
     "name": "Ruizhen Gu"
