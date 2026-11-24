@@ -12,7 +12,7 @@ using UnityEngine.XR.Interaction.Toolkit;
 using UnityEngine.XR.Interaction.Toolkit.Interactables;
 using UnityEngine.XR.Interaction.Toolkit.Interactors;
 
-namespace Vektor
+namespace Stagecraft
 {
     public enum XrActionKind
     {
@@ -40,20 +40,32 @@ namespace Vektor
     [Serializable]
     public class XrObjectRef
     {
+        public string stagecraftId;
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
         public string vektorId;
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
         public string intenXionId;
         public string scenePath;
         public string name;
+
+        public string GetStableId()
+        {
+            if (!string.IsNullOrEmpty(stagecraftId))
+                return stagecraftId;
+            if (!string.IsNullOrEmpty(vektorId))
+                return vektorId;
+            return intenXionId;
+        }
 
         public static XrObjectRef FromGameObject(GameObject obj)
         {
             if (obj == null)
                 return null;
 
-            var id = obj.GetComponent<VektorId>();
+            var id = obj.GetComponent<StagecraftId>();
             return new XrObjectRef
             {
-                vektorId = id != null ? id.Id : null,
+                stagecraftId = id != null ? id.Id : null,
                 scenePath = ObjectResolver.GetScenePath(obj),
                 name = obj.name
             };
@@ -87,7 +99,9 @@ namespace Vektor
     [Serializable]
     public class XrActionPlan
     {
-        public int schemaVersion = 1;
+        public const int CurrentSchemaVersion = 1;
+
+        public int schemaVersion = CurrentSchemaVersion;
         public string planId = Guid.NewGuid().ToString("N");
         public List<XrActionSpec> actions = new List<XrActionSpec>();
 
@@ -96,11 +110,16 @@ namespace Vektor
             var plan = JsonConvert.DeserializeObject<XrActionPlan>(json);
             if (plan == null)
                 throw new ArgumentException("Action plan JSON did not contain a valid plan.");
-            if (plan.schemaVersion != 1)
-                throw new NotSupportedException($"Unsupported Vektor action schema version {plan.schemaVersion}.");
+            if (plan.schemaVersion != CurrentSchemaVersion)
+                throw new NotSupportedException(UnsupportedSchemaMessage(plan.schemaVersion));
             if (plan.actions == null)
                 plan.actions = new List<XrActionSpec>();
             return plan;
+        }
+
+        public static string UnsupportedSchemaMessage(int version)
+        {
+            return $"Unsupported Stagecraft action schema version {version}.";
         }
 
         public string ToJson()
@@ -168,7 +187,7 @@ namespace Vektor
         }
     }
 
-    public class VektorId : MonoBehaviour
+    public class StagecraftId : MonoBehaviour
     {
         [SerializeField] string m_Id;
 
@@ -195,7 +214,7 @@ namespace Vektor
             if (reference == null)
                 return null;
 
-            var stableId = !string.IsNullOrEmpty(reference.vektorId) ? reference.vektorId : reference.intenXionId;
+            var stableId = reference.GetStableId();
             if (!string.IsNullOrEmpty(stableId))
             {
                 var byId = FindById(stableId);
@@ -218,7 +237,7 @@ namespace Vektor
                 if (matches.Count == 1)
                     return matches[0];
                 if (matches.Count > 1)
-                    warnings?.Add($"Name '{reference.name}' matched {matches.Count} objects; using the first match. Add VektorId for stability.");
+                    warnings?.Add($"Name '{reference.name}' matched {matches.Count} objects; using the first match. Add StagecraftId for stability.");
                 if (matches.Count > 0)
                     return matches[0];
             }
@@ -244,9 +263,9 @@ namespace Vektor
         static GameObject FindById(string id)
         {
 #if UNITY_2023_1_OR_NEWER
-            var markers = UnityEngine.Object.FindObjectsByType<VektorId>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            var markers = UnityEngine.Object.FindObjectsByType<StagecraftId>(FindObjectsInactive.Include, FindObjectsSortMode.None);
 #else
-            var markers = UnityEngine.Object.FindObjectsOfType<VektorId>(true);
+            var markers = UnityEngine.Object.FindObjectsOfType<StagecraftId>(true);
 #endif
             foreach (var marker in markers)
             {
@@ -365,7 +384,7 @@ namespace Vektor
 
         XrObservation CreateObservation(string eventType, GameObject obj, string detail = null)
         {
-            var id = obj.GetComponent<VektorId>();
+            var id = obj.GetComponent<StagecraftId>();
             return new XrObservation
             {
                 eventType = eventType,
@@ -610,7 +629,7 @@ namespace Vektor
     {
         public bool AssertEventFired(IEnumerable<XrObservation> observations, string eventType, GameObject target, out string message)
         {
-            var targetId = target != null ? target.GetComponent<VektorId>()?.Id : null;
+            var targetId = target != null ? target.GetComponent<StagecraftId>()?.Id : null;
             foreach (var observation in observations)
             {
                 if (observation.eventType != eventType)
@@ -748,10 +767,10 @@ namespace Vektor
                 yield break;
             }
 
-            if (plan.schemaVersion != 1)
+            if (plan.schemaVersion != XrActionPlan.CurrentSchemaVersion)
             {
                 LastResult.status = XrActionStatus.Failed;
-                LastResult.warnings.Add($"Unsupported Vektor action schema version {plan.schemaVersion}.");
+                LastResult.warnings.Add(XrActionPlan.UnsupportedSchemaMessage(plan.schemaVersion));
                 yield break;
             }
 
@@ -1080,9 +1099,9 @@ namespace Vektor
     }
 
 #if UNITY_EDITOR
-    public static class VektorIdSeeder
+    public static class IdSeeder
     {
-        [UnityEditor.MenuItem("Tools/Vektor/Seed Missing IDs")]
+        [UnityEditor.MenuItem("Tools/Stagecraft/Seed Missing IDs")]
         public static void SeedMissingIds()
         {
             var count = 0;
@@ -1093,16 +1112,16 @@ namespace Vektor
 #endif
             foreach (var interactable in interactables)
             {
-                var marker = interactable.GetComponent<VektorId>();
+                var marker = interactable.GetComponent<StagecraftId>();
                 if (marker == null)
                 {
-                    marker = UnityEditor.Undo.AddComponent<VektorId>(interactable.gameObject);
+                    marker = UnityEditor.Undo.AddComponent<StagecraftId>(interactable.gameObject);
                     count++;
                 }
                 marker.EnsureId();
                 UnityEditor.EditorUtility.SetDirty(marker);
             }
-            Debug.Log($"Vektor seeded IDs on {count} interactables.");
+            Debug.Log($"Stagecraft seeded IDs on {count} interactables.");
         }
     }
 #endif

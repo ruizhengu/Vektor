@@ -21,7 +21,7 @@ Stagecraft (formerly Vektor) is the productized successor to the IntenXion resea
 In Unity Package Manager, add this package from disk or by Git URL. For local development:
 
 ```text
-file:/absolute/path/to/Vektor
+file:/absolute/path/to/stagecraft
 ```
 
 Required Unity packages:
@@ -37,8 +37,8 @@ The package includes runtime code under `Runtime/` and focused PlayMode tests un
 For hand-written PlayMode tests, use the compatibility fluent API:
 
 ```csharp
-using Vektor;
-using static Vektor.TestLib;
+using Stagecraft;
+using static Stagecraft.TestLib;
 
 yield return new ActionBuilder()
     .NavigateTo(origin, cube)
@@ -66,8 +66,8 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
-using Vektor;
-using static Vektor.TestLib;
+using Stagecraft;
+using static Stagecraft.TestLib;
 
 public class XrInteractionTests
 {
@@ -142,7 +142,7 @@ For generated plans, prefer JSON:
       "id": "move-controller",
       "type": "MoveControllerTo",
       "driverMode": "DirectTransform",
-      "target": { "vektorId": "cube-01", "name": "Cube Interactable" },
+      "target": { "stagecraftId": "cube-01", "name": "Cube Interactable" },
       "controller": { "name": "Right Controller" },
       "timeoutSeconds": 5
     },
@@ -177,20 +177,20 @@ Legacy plans that use `parameters.keyboardFallback` still work. New agent-genera
 
 ## Stable Object References
 
-Generated plans should identify scene objects with `VektorId`:
+Generated plans should identify scene objects with `StagecraftId`:
 
 ```json
-{ "vektorId": "cube-01" }
+{ "stagecraftId": "cube-01" }
 ```
 
 Resolution order is:
 
-1. `vektorId`
-2. `intenXionId` compatibility fallback
+1. `stagecraftId`
+2. `vektorId` / `intenXionId` compatibility fallback
 3. `scenePath`
 4. `name`
 
-Name lookup is intentionally last because duplicate names are common in Unity scenes. Use `Tools > Vektor > Seed Missing IDs` in the Unity editor to add IDs to XR interactables.
+Name lookup is intentionally last because duplicate names are common in Unity scenes. Use `Tools > Stagecraft > Seed Missing IDs` in the Unity editor to add IDs to XR interactables.
 
 ## Results
 
@@ -212,11 +212,11 @@ Debug.Log(runner.LastResult.ToJson());
 
 ```text
 Runtime/
-  ActionBuilder.cs        # compatibility fluent API
-  TestLib.cs              # XR Device Simulator keyboard helpers
-  VektorRuntime.cs        # schema, resolver, runner, observations, assertions
+  ActionBuilder.cs          # compatibility fluent API
+  TestLib.cs                # XR Device Simulator keyboard helpers
+  StagecraftRuntime.cs      # schema, resolver, runner, observations, assertions
 Tests/
-  VektorRuntimeTests.cs   # focused Unity runtime tests
+  StagecraftRuntimeTests.cs # focused Unity runtime tests
 ```
 
-This repo intentionally does not contain the old IntenXion sample project. Keep sample scenes and evaluation scenes outside Vektor so the package stays small and deterministic.
+This repo intentionally does not contain the old IntenXion sample project. Keep sample scenes and evaluation scenes outside Stagecraft so the package stays small and deterministic.

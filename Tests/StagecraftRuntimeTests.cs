@@ -3,9 +3,9 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
 
-namespace Vektor
+namespace Stagecraft
 {
-    public class VektorRuntimeTests
+    public class StagecraftRuntimeTests
     {
         [UnityTest]
         public IEnumerator WaitPlanFromJsonCompletes()
@@ -74,21 +74,23 @@ namespace Vektor
             }
         }
 
-        [Test]
-        public void ResolverPrefersStableVektorId()
+        [TestCase("stagecraftId")]
+        [TestCase("vektorId")]
+        public void ResolverPrefersStableIdOverName(string idField)
         {
             var first = new GameObject("Duplicate");
             var second = new GameObject("Duplicate");
             try
             {
-                var firstId = first.AddComponent<VektorId>();
+                var firstId = first.AddComponent<StagecraftId>();
                 firstId.EnsureId();
-                var secondId = second.AddComponent<VektorId>();
+                var secondId = second.AddComponent<StagecraftId>();
                 secondId.EnsureId();
 
                 var resolved = new ObjectResolver().Resolve(new XrObjectRef
                 {
-                    vektorId = secondId.Id,
+                    stagecraftId = idField == "stagecraftId" ? secondId.Id : null,
+                    vektorId = idField == "vektorId" ? secondId.Id : null,
                     name = "Duplicate"
                 });
 
@@ -141,15 +143,15 @@ namespace Vektor
         }
 
         [Test]
-        public void AssertEventFiredPrefersVektorIdOverName()
+        public void AssertEventFiredPrefersStagecraftIdOverName()
         {
             var first = new GameObject("Duplicate");
             var second = new GameObject("Duplicate");
             try
             {
-                var firstId = first.AddComponent<VektorId>();
+                var firstId = first.AddComponent<StagecraftId>();
                 firstId.EnsureId();
-                var secondId = second.AddComponent<VektorId>();
+                var secondId = second.AddComponent<StagecraftId>();
                 secondId.EnsureId();
 
                 var observations = new[]

@@ -1,10 +1,7 @@
 {
-    "name": "Vektor.Tests",
-    "rootNamespace": "Vektor",
+    "name": "Stagecraft.Runtime",
+    "rootNamespace": "Stagecraft",
     "references": [
-        "Vektor.Runtime",
-        "UnityEngine.TestRunner",
-        "UnityEditor.TestRunner",
         "Unity.InputSystem",
         "Unity.XR.Interaction.Toolkit",
         "Unity.XR.Content.Interaction"
@@ -14,13 +11,10 @@
     "allowUnsafeCode": false,
     "overrideReferences": true,
     "precompiledReferences": [
-        "nunit.framework.dll",
         "Newtonsoft.Json.dll"
     ],
-    "autoReferenced": false,
-    "defineConstraints": [
-        "UNITY_INCLUDE_TESTS"
-    ],
+    "autoReferenced": true,
+    "defineConstraints": [],
     "versionDefines": [],
     "noEngineReferences": false
 }
