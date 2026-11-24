@@ -3,9 +3,9 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
 
-namespace Vektor
+namespace Stagecraft
 {
-    public class VektorRuntimeTests
+    public class StagecraftRuntimeTests
     {
         [UnityTest]
         public IEnumerator WaitPlanFromJsonCompletes()
@@ -75,15 +75,42 @@ namespace Vektor
         }
 
         [Test]
-        public void ResolverPrefersStableVektorId()
+        public void ResolverPrefersStableStagecraftId()
         {
             var first = new GameObject("Duplicate");
             var second = new GameObject("Duplicate");
             try
             {
-                var firstId = first.AddComponent<VektorId>();
+                var firstId = first.AddComponent<StagecraftId>();
                 firstId.EnsureId();
-                var secondId = second.AddComponent<VektorId>();
+                var secondId = second.AddComponent<StagecraftId>();
+                secondId.EnsureId();
+
+                var resolved = new ObjectResolver().Resolve(new XrObjectRef
+                {
+                    stagecraftId = secondId.Id,
+                    name = "Duplicate"
+                });
+
+                Assert.AreSame(second, resolved);
+            }
+            finally
+            {
+                Object.DestroyImmediate(first);
+                Object.DestroyImmediate(second);
+            }
+        }
+
+        [Test]
+        public void ResolverFallsBackToLegacyVektorId()
+        {
+            var first = new GameObject("Duplicate");
+            var second = new GameObject("Duplicate");
+            try
+            {
+                var firstId = first.AddComponent<StagecraftId>();
+                firstId.EnsureId();
+                var secondId = second.AddComponent<StagecraftId>();
                 secondId.EnsureId();
 
                 var resolved = new ObjectResolver().Resolve(new XrObjectRef
@@ -141,15 +168,15 @@ namespace Vektor
         }
 
         [Test]
-        public void AssertEventFiredPrefersVektorIdOverName()
+        public void AssertEventFiredPrefersStagecraftIdOverName()
         {
             var first = new GameObject("Duplicate");
             var second = new GameObject("Duplicate");
             try
             {
-                var firstId = first.AddComponent<VektorId>();
+                var firstId = first.AddComponent<StagecraftId>();
                 firstId.EnsureId();
-                var secondId = second.AddComponent<VektorId>();
+                var secondId = second.AddComponent<StagecraftId>();
                 secondId.EnsureId();
 
                 var observations = new[]

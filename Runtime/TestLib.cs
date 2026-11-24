@@ -6,7 +6,7 @@ using UnityEngine.InputSystem.LowLevel;
 using UnityEngine.XR.Interaction.Toolkit;
 using UnityEngine.XR.Interaction.Toolkit.Interactables;
 
-namespace Vektor
+namespace Stagecraft
 {
     public static class TestLib
     {

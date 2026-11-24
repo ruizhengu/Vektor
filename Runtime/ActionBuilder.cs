@@ -5,10 +5,10 @@ using System.Globalization;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-namespace Vektor
+namespace Stagecraft
 {
     /// <summary>
-    /// Backwards-compatible fluent API that now builds typed Vektor action specs.
+    /// Backwards-compatible fluent API that now builds typed Stagecraft action specs.
     /// </summary>
     public class ActionBuilder
     {
