@@ -243,7 +243,12 @@ namespace Vektor
 
         static GameObject FindById(string id)
         {
-            foreach (var marker in UnityEngine.Object.FindObjectsOfType<VektorId>(true))
+#if UNITY_2023_1_OR_NEWER
+            var markers = UnityEngine.Object.FindObjectsByType<VektorId>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+#else
+            var markers = UnityEngine.Object.FindObjectsOfType<VektorId>(true);
+#endif
+            foreach (var marker in markers)
             {
                 if (marker != null && marker.Id == id)
                     return marker.gameObject;
@@ -310,7 +315,7 @@ namespace Vektor
         }
     }
 
-    public class ObservationRecorder
+    public class ObservationRecorder : IDisposable
     {
         readonly List<XrObservation> m_Observations = new List<XrObservation>();
         readonly Dictionary<GameObject, XRBaseInteractable> m_Registered = new Dictionary<GameObject, XRBaseInteractable>();
@@ -333,12 +338,19 @@ namespace Vektor
             m_Registered[obj] = interactable;
         }
 
-        public void RecordTransform(string eventType, GameObject obj, string detail = null)
+        public void Dispose()
         {
-            if (obj == null)
-                return;
+            foreach (var interactable in m_Registered.Values)
+            {
+                if (interactable == null)
+                    continue;
 
-            m_Observations.Add(CreateObservation(eventType, obj, detail));
+                interactable.selectEntered.RemoveListener(OnSelectEntered);
+                interactable.selectExited.RemoveListener(OnSelectExited);
+                interactable.activated.RemoveListener(OnActivated);
+                interactable.deactivated.RemoveListener(OnDeactivated);
+            }
+            m_Registered.Clear();
         }
 
         public List<XrObservation> SnapshotSince(int index)
@@ -387,7 +399,19 @@ namespace Vektor
         }
     }
 
-    public class InteractorDriver
+    public interface IXrActionDriver
+    {
+        IEnumerator NavigateTo(Transform player, Transform target, float moveSpeed, float interactionAngle, float interactionDistance, float timeoutSeconds, Func<string, bool> fail);
+        IEnumerator MoveControllerTo(Transform controller, Transform target, float speed, float threshold, float timeoutSeconds, Func<string, bool> fail);
+        IEnumerator MoveController(Transform controller, Vector3 delta, float duration);
+        IEnumerator RotateController(Transform controller, Vector3 eulerDelta, float duration);
+        bool SelectEnter(GameObject controller, GameObject target, out string error);
+        bool SelectExit(GameObject controller, GameObject target, out string error);
+        bool Activate(GameObject controller, GameObject target, out string error);
+        bool Deactivate(GameObject controller, GameObject target, out string error);
+    }
+
+    public class InteractorDriver : IXrActionDriver
     {
         public IEnumerator NavigateTo(Transform player, Transform target, float moveSpeed, float interactionAngle, float interactionDistance, float timeoutSeconds, Func<string, bool> fail)
         {
@@ -487,21 +511,8 @@ namespace Vektor
 
         public bool SelectEnter(GameObject controller, GameObject target, out string error)
         {
-            error = null;
-            var interactor = controller != null ? controller.GetComponentInParent<XRBaseInteractor>() : null;
-            var interactable = target != null ? target.GetComponent<XRBaseInteractable>() : null;
-            if (interactor == null || interactable == null)
-            {
-                error = "SelectEnter requires XRBaseInteractor on controller hierarchy and XRBaseInteractable on target.";
+            if (!TryResolveSelectContext("SelectEnter", controller, target, out var manager, out var interactor, out var interactable, out error))
                 return false;
-            }
-
-            var manager = interactor.interactionManager != null ? interactor.interactionManager : UnityEngine.Object.FindObjectOfType<XRInteractionManager>();
-            if (manager == null)
-            {
-                error = "No XRInteractionManager found for SelectEnter.";
-                return false;
-            }
 
             manager.SelectEnter((IXRSelectInteractor)interactor, (IXRSelectInteractable)interactable);
             return true;
@@ -509,21 +520,8 @@ namespace Vektor
 
         public bool SelectExit(GameObject controller, GameObject target, out string error)
         {
-            error = null;
-            var interactor = controller != null ? controller.GetComponentInParent<XRBaseInteractor>() : null;
-            var interactable = target != null ? target.GetComponent<XRBaseInteractable>() : null;
-            if (interactor == null || interactable == null)
-            {
-                error = "SelectExit requires XRBaseInteractor on controller hierarchy and XRBaseInteractable on target.";
+            if (!TryResolveSelectContext("SelectExit", controller, target, out var manager, out var interactor, out var interactable, out error))
                 return false;
-            }
-
-            var manager = interactor.interactionManager != null ? interactor.interactionManager : UnityEngine.Object.FindObjectOfType<XRInteractionManager>();
-            if (manager == null)
-            {
-                error = "No XRInteractionManager found for SelectExit.";
-                return false;
-            }
 
             manager.SelectExit((IXRSelectInteractor)interactor, (IXRSelectInteractable)interactable);
             return true;
@@ -531,41 +529,79 @@ namespace Vektor
 
         public bool Activate(GameObject controller, GameObject target, out string error)
         {
-            error = null;
-            var interactor = controller != null ? controller.GetComponentInParent<XRBaseInteractor>() as IXRActivateInteractor : null;
-            var interactable = target != null ? target.GetComponent<XRBaseInteractable>() : null;
-            var activateInteractable = interactable as IXRActivateInteractable;
-            if (interactor == null || activateInteractable == null)
-            {
-                error = "Activate requires IXRActivateInteractor on controller hierarchy and XRBaseInteractable on target.";
+            if (!TryResolveActivateContext("Activate", controller, target, out var interactor, out var interactable, out error))
                 return false;
-            }
 
-            activateInteractable.OnActivated(new ActivateEventArgs
+            interactable.OnActivated(new ActivateEventArgs
             {
                 interactorObject = interactor,
-                interactableObject = activateInteractable
+                interactableObject = interactable
             });
             return true;
         }
 
         public bool Deactivate(GameObject controller, GameObject target, out string error)
         {
-            error = null;
-            var interactor = controller != null ? controller.GetComponentInParent<XRBaseInteractor>() as IXRActivateInteractor : null;
-            var interactable = target != null ? target.GetComponent<XRBaseInteractable>() : null;
-            var activateInteractable = interactable as IXRActivateInteractable;
-            if (interactor == null || activateInteractable == null)
+            if (!TryResolveActivateContext("Deactivate", controller, target, out var interactor, out var interactable, out error))
+                return false;
+
+            interactable.OnDeactivated(new DeactivateEventArgs
             {
-                error = "Deactivate requires IXRActivateInteractor on controller hierarchy and XRBaseInteractable on target.";
+                interactorObject = interactor,
+                interactableObject = interactable
+            });
+            return true;
+        }
+
+        static XRBaseInteractor FindInteractor(GameObject controller)
+        {
+            if (controller == null)
+                return null;
+            return controller.GetComponentInChildren<XRBaseInteractor>() ?? controller.GetComponentInParent<XRBaseInteractor>();
+        }
+
+        static bool TryResolveSelectContext(string op, GameObject controller, GameObject target, out XRInteractionManager manager, out XRBaseInteractor interactor, out XRBaseInteractable interactable, out string error)
+        {
+            error = null;
+            manager = null;
+            interactor = FindInteractor(controller);
+            interactable = target != null ? target.GetComponent<XRBaseInteractable>() : null;
+            if (interactor == null || interactable == null)
+            {
+                error = $"{op} requires XRBaseInteractor on controller hierarchy and XRBaseInteractable on target.";
                 return false;
             }
 
-            activateInteractable.OnDeactivated(new DeactivateEventArgs
+            manager = interactor.interactionManager;
+            if (manager == null)
             {
-                interactorObject = interactor,
-                interactableObject = activateInteractable
-            });
+#if UNITY_2023_1_OR_NEWER
+                manager = UnityEngine.Object.FindFirstObjectByType<XRInteractionManager>();
+#else
+                manager = UnityEngine.Object.FindObjectOfType<XRInteractionManager>();
+#endif
+            }
+
+            if (manager == null)
+            {
+                error = $"No XRInteractionManager found for {op}.";
+                return false;
+            }
+
+            return true;
+        }
+
+        static bool TryResolveActivateContext(string op, GameObject controller, GameObject target, out IXRActivateInteractor interactor, out IXRActivateInteractable interactable, out string error)
+        {
+            error = null;
+            interactor = FindInteractor(controller) as IXRActivateInteractor;
+            interactable = target != null ? target.GetComponent<XRBaseInteractable>() as IXRActivateInteractable : null;
+            if (interactor == null || interactable == null)
+            {
+                error = $"{op} requires IXRActivateInteractor on controller hierarchy and XRBaseInteractable on target.";
+                return false;
+            }
+
             return true;
         }
     }
@@ -574,9 +610,18 @@ namespace Vektor
     {
         public bool AssertEventFired(IEnumerable<XrObservation> observations, string eventType, GameObject target, out string message)
         {
+            var targetId = target != null ? target.GetComponent<VektorId>()?.Id : null;
             foreach (var observation in observations)
             {
-                if (observation.eventType == eventType && (target == null || observation.objectName == target.name))
+                if (observation.eventType != eventType)
+                    continue;
+
+                var matches = target == null ||
+                    (!string.IsNullOrEmpty(targetId) && !string.IsNullOrEmpty(observation.objectId)
+                        ? observation.objectId == targetId
+                        : observation.objectName == target.name);
+
+                if (matches)
                 {
                     message = $"Observed {eventType} on {observation.objectName}.";
                     return true;
@@ -660,23 +705,31 @@ namespace Vektor
         }
     }
 
-    public class ActionRunner
+    public class ActionRunner : IDisposable
     {
         readonly ObjectResolver m_Resolver;
-        readonly InteractorDriver m_Driver;
+        readonly IXrActionDriver m_Driver;
         readonly ObservationRecorder m_Recorder;
         readonly AssertionEvaluator m_Assertions;
+        readonly bool m_OwnsRecorder;
         GameObject m_CurrentTarget;
         GameObject m_CurrentController;
 
         public XrExecutionResult LastResult { get; private set; }
 
-        public ActionRunner(ObjectResolver resolver = null, InteractorDriver driver = null, ObservationRecorder recorder = null, AssertionEvaluator assertions = null)
+        public ActionRunner(ObjectResolver resolver = null, IXrActionDriver driver = null, ObservationRecorder recorder = null, AssertionEvaluator assertions = null)
         {
             m_Resolver = resolver ?? new ObjectResolver();
             m_Driver = driver ?? new InteractorDriver();
+            m_OwnsRecorder = recorder == null;
             m_Recorder = recorder ?? new ObservationRecorder();
             m_Assertions = assertions ?? new AssertionEvaluator();
+        }
+
+        public void Dispose()
+        {
+            if (m_OwnsRecorder)
+                m_Recorder.Dispose();
         }
 
         public IEnumerator Execute(XrActionPlan plan)
@@ -731,14 +784,9 @@ namespace Vektor
             var controller = Resolve(action.controller, result.warnings);
 
             if (target != null)
-            {
                 m_CurrentTarget = target;
-                m_Recorder.Register(target);
-            }
             else if (RequiresTarget(action.type))
-            {
                 target = m_CurrentTarget;
-            }
 
             if (controller != null)
                 m_CurrentController = controller;
@@ -768,125 +816,40 @@ namespace Vektor
                         fail("NavigateTo requires driverMode DirectTransform.");
                         break;
                     }
-                    yield return m_Driver.NavigateTo(Required(controller, "controller/player", fail)?.transform, Required(target, "target", fail)?.transform, Float(action, "moveSpeed", 1.0f), Float(action, "interactionAngle", 5.0f), Float(action, "interactionDistance", 1.0f), action.timeoutSeconds, fail);
+                    yield return m_Driver.NavigateTo(controller != null ? controller.transform : null, target != null ? target.transform : null, Float(action, "moveSpeed", 1.0f), Float(action, "interactionAngle", 5.0f), Float(action, "interactionDistance", 1.0f), action.timeoutSeconds, fail);
                     break;
                 case XrActionKind.MoveControllerTo:
                     if (driverMode == XrDriverMode.XRDeviceSimulatorKeyboard)
                     {
                         if (controller == null || target == null)
-                        {
                             fail("MoveControllerTo with XRDeviceSimulatorKeyboard requires resolved controller and target objects.");
-                        }
                         else
-                        {
                             yield return RunWithTimeout(TestLib.MoveControllerToObject(controller, target, Bool(action, "selectHeld", false)), action.timeoutSeconds, () => fail($"MoveControllerTo with XRDeviceSimulatorKeyboard timed out after {action.timeoutSeconds:0.###}s."));
-                        }
+                    }
+                    else if (driverMode != XrDriverMode.DirectTransform)
+                    {
+                        fail("MoveControllerTo requires driverMode DirectTransform or XRDeviceSimulatorKeyboard.");
                     }
                     else
                     {
-                        if (driverMode != XrDriverMode.DirectTransform)
-                        {
-                            fail("MoveControllerTo requires driverMode DirectTransform or XRDeviceSimulatorKeyboard.");
-                            break;
-                        }
-                        yield return m_Driver.MoveControllerTo(Required(controller, "controller", fail)?.transform, Required(target, "target", fail)?.transform, Float(action, "speed", 1.0f), Float(action, "threshold", 0.05f), action.timeoutSeconds, fail);
+                        yield return m_Driver.MoveControllerTo(controller != null ? controller.transform : null, target != null ? target.transform : null, Float(action, "speed", 1.0f), Float(action, "threshold", 0.05f), action.timeoutSeconds, fail);
                     }
                     break;
                 case XrActionKind.SelectEnter:
-                    if (driverMode == XrDriverMode.XRDeviceSimulatorKeyboard)
-                    {
-                        yield return TestLib.Grab();
-                    }
-                    else if (driverMode != XrDriverMode.XRInteractionManager)
-                    {
-                        fail("SelectEnter requires driverMode XRInteractionManager or XRDeviceSimulatorKeyboard.");
-                    }
-                    else if (controller == null || target == null)
-                    {
-                        if (explicitDriverMode)
-                            fail("SelectEnter with XRInteractionManager requires resolved controller and target objects.");
-                        else
-                            yield return WarnAndRunKeyboard(result, "SelectEnter did not have a resolved controller/target; falling back to keyboard grab.", TestLib.Grab());
-                    }
-                    else if (!m_Driver.SelectEnter(controller, target, out var selectEnterError))
-                    {
-                        if (explicitDriverMode)
-                            fail(selectEnterError);
-                        else
-                            yield return WarnAndRunKeyboard(result, selectEnterError + " Falling back to keyboard grab.", TestLib.Grab());
-                    }
+                    yield return ExecuteInteractionAction("SelectEnter", driverMode, explicitDriverMode, controller, target, result, fail,
+                        m_Driver.SelectEnter, TestLib.Grab, "keyboard grab");
                     break;
                 case XrActionKind.SelectExit:
-                    if (driverMode == XrDriverMode.XRDeviceSimulatorKeyboard)
-                    {
-                        yield return TestLib.ReleaseAllKeys();
-                    }
-                    else if (driverMode != XrDriverMode.XRInteractionManager)
-                    {
-                        fail("SelectExit requires driverMode XRInteractionManager or XRDeviceSimulatorKeyboard.");
-                    }
-                    else if (controller == null || target == null)
-                    {
-                        if (explicitDriverMode)
-                            fail("SelectExit with XRInteractionManager requires resolved controller and target objects.");
-                        else
-                            yield return WarnAndRunKeyboard(result, "SelectExit did not have a resolved controller/target; falling back to keyboard release.", TestLib.ReleaseAllKeys());
-                    }
-                    else if (!m_Driver.SelectExit(controller, target, out var selectExitError))
-                    {
-                        if (explicitDriverMode)
-                            fail(selectExitError);
-                        else
-                            yield return WarnAndRunKeyboard(result, selectExitError + " Falling back to keyboard release.", TestLib.ReleaseAllKeys());
-                    }
+                    yield return ExecuteInteractionAction("SelectExit", driverMode, explicitDriverMode, controller, target, result, fail,
+                        m_Driver.SelectExit, TestLib.ReleaseAllKeys, "keyboard release");
                     break;
                 case XrActionKind.Activate:
-                    if (driverMode == XrDriverMode.XRDeviceSimulatorKeyboard)
-                    {
-                        yield return Bool(action, "selectHeld", false) ? TestLib.GrabHoldAndTrigger() : TestLib.Trigger();
-                    }
-                    else if (driverMode != XrDriverMode.XRInteractionManager)
-                    {
-                        fail("Activate requires driverMode XRInteractionManager or XRDeviceSimulatorKeyboard.");
-                    }
-                    else if (controller == null || target == null)
-                    {
-                        if (explicitDriverMode)
-                            fail("Activate with XRInteractionManager requires resolved controller and target objects.");
-                        else
-                            yield return WarnAndRunKeyboard(result, "Activate did not have a resolved controller/target; falling back to keyboard.", Bool(action, "selectHeld", false) ? TestLib.GrabHoldAndTrigger() : TestLib.Trigger());
-                    }
-                    else if (!m_Driver.Activate(controller, target, out var activateError))
-                    {
-                        if (explicitDriverMode)
-                            fail(activateError);
-                        else
-                            yield return WarnAndRunKeyboard(result, activateError + " Falling back to keyboard.", Bool(action, "selectHeld", false) ? TestLib.GrabHoldAndTrigger() : TestLib.Trigger());
-                    }
+                    yield return ExecuteInteractionAction("Activate", driverMode, explicitDriverMode, controller, target, result, fail,
+                        m_Driver.Activate, () => Bool(action, "selectHeld", false) ? TestLib.GrabHoldAndTrigger() : TestLib.Trigger(), "keyboard");
                     break;
                 case XrActionKind.Deactivate:
-                    if (driverMode == XrDriverMode.XRDeviceSimulatorKeyboard)
-                    {
-                        yield return TestLib.ReleaseAllKeys();
-                    }
-                    else if (driverMode != XrDriverMode.XRInteractionManager)
-                    {
-                        fail("Deactivate requires driverMode XRInteractionManager or XRDeviceSimulatorKeyboard.");
-                    }
-                    else if (controller == null || target == null)
-                    {
-                        if (explicitDriverMode)
-                            fail("Deactivate with XRInteractionManager requires resolved controller and target objects.");
-                        else
-                            yield return WarnAndRunKeyboard(result, "Deactivate did not have a resolved controller/target; falling back to keyboard release.", TestLib.ReleaseAllKeys());
-                    }
-                    else if (!m_Driver.Deactivate(controller, target, out var deactivateError))
-                    {
-                        if (explicitDriverMode)
-                            fail(deactivateError);
-                        else
-                            yield return WarnAndRunKeyboard(result, deactivateError + " Falling back to keyboard release.", TestLib.ReleaseAllKeys());
-                    }
+                    yield return ExecuteInteractionAction("Deactivate", driverMode, explicitDriverMode, controller, target, result, fail,
+                        m_Driver.Deactivate, TestLib.ReleaseAllKeys, "keyboard release");
                     break;
                 case XrActionKind.MoveController:
                     if (driverMode == XrDriverMode.XRDeviceSimulatorKeyboard && TryParseKey(String(action, "keyFallback", null), out var moveKey))
@@ -955,6 +918,50 @@ namespace Vektor
             if (obj != null)
                 m_Recorder.Register(obj);
             return obj;
+        }
+
+        delegate bool DriverInteractionOp(GameObject controller, GameObject target, out string error);
+
+        static IEnumerator ExecuteInteractionAction(
+            string opName,
+            XrDriverMode driverMode,
+            bool explicitDriverMode,
+            GameObject controller,
+            GameObject target,
+            XrActionResult result,
+            Func<string, bool> fail,
+            DriverInteractionOp driverOp,
+            Func<IEnumerator> keyboardFallback,
+            string fallbackLabel)
+        {
+            if (driverMode == XrDriverMode.XRDeviceSimulatorKeyboard)
+            {
+                yield return keyboardFallback();
+                yield break;
+            }
+
+            if (driverMode != XrDriverMode.XRInteractionManager)
+            {
+                fail($"{opName} requires driverMode XRInteractionManager or XRDeviceSimulatorKeyboard.");
+                yield break;
+            }
+
+            if (controller == null || target == null)
+            {
+                if (explicitDriverMode)
+                    fail($"{opName} with XRInteractionManager requires resolved controller and target objects.");
+                else
+                    yield return WarnAndRunKeyboard(result, $"{opName} did not have a resolved controller/target; falling back to {fallbackLabel}.", keyboardFallback());
+                yield break;
+            }
+
+            if (!driverOp(controller, target, out var error))
+            {
+                if (explicitDriverMode)
+                    fail(error);
+                else
+                    yield return WarnAndRunKeyboard(result, $"{error} Falling back to {fallbackLabel}.", keyboardFallback());
+            }
         }
 
         static IEnumerator WarnAndRunKeyboard(XrActionResult result, string warning, IEnumerator routine)
@@ -1079,7 +1086,12 @@ namespace Vektor
         public static void SeedMissingIds()
         {
             var count = 0;
-            foreach (var interactable in UnityEngine.Object.FindObjectsOfType<XRBaseInteractable>(true))
+#if UNITY_2023_1_OR_NEWER
+            var interactables = UnityEngine.Object.FindObjectsByType<XRBaseInteractable>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+#else
+            var interactables = UnityEngine.Object.FindObjectsOfType<XRBaseInteractable>(true);
+#endif
+            foreach (var interactable in interactables)
             {
                 var marker = interactable.GetComponent<VektorId>();
                 if (marker == null)

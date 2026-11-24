@@ -21,6 +21,7 @@ namespace Vektor
 
         public static GameObject FindXRObject(string name, bool returnOnlyGameObject = false)
         {
+            PruneDestroyedListeners();
             GameObject foundObject = GameObject.Find(name);
             if (foundObject == null)
             {
@@ -79,7 +80,7 @@ namespace Vektor
                 if (distance > InteractionDistance)
                 {
                     Vector3 newPosition = Vector3.MoveTowards(
-                        new Vector3(currentPos.x, currentPos.y, currentPos.z),
+                        currentPos,
                         new Vector3(targetPos.x, currentPos.y, targetPos.z),
                         MoveSpeed * Time.deltaTime
                     );
@@ -166,11 +167,14 @@ namespace Vektor
 
         public static Vector3 GetControllerWorldDirection(Vector3 currentPos, Vector3 targetPos)
         {
-            Vector3 controllerCurrentViewport = Camera.main.WorldToViewportPoint(currentPos);
-            Vector3 controllerTargetViewport = Camera.main.WorldToViewportPoint(targetPos);
+            var cam = Camera.main;
+            if (cam == null)
+                return targetPos - currentPos;
+
+            Vector3 controllerCurrentViewport = cam.WorldToViewportPoint(currentPos);
+            Vector3 controllerTargetViewport = cam.WorldToViewportPoint(targetPos);
             Vector3 viewportDirection = controllerTargetViewport - controllerCurrentViewport;
-            Vector3 worldDirection = Camera.main.ViewportToWorldPoint(controllerCurrentViewport + viewportDirection.normalized * Time.deltaTime) - currentPos;
-            return worldDirection;
+            return cam.ViewportToWorldPoint(controllerCurrentViewport + viewportDirection.normalized * Time.deltaTime) - currentPos;
         }
 
         public static IEnumerator PressKeys(Key[] keys)
@@ -343,10 +347,38 @@ namespace Vektor
 
         public static void UnregisterInteractionListener(GameObject interactableObject)
         {
-            if (RegisteredListeners.TryGetValue(interactableObject, out InteractionListener listener))
+            if (interactableObject != null && RegisteredListeners.TryGetValue(interactableObject, out InteractionListener listener))
             {
                 UnregisterInteractionListener(interactableObject, listener);
                 RegisteredListeners.Remove(interactableObject);
+            }
+        }
+
+        public static void ClearListeners()
+        {
+            foreach (var kvp in RegisteredListeners)
+            {
+                if (kvp.Key != null)
+                    UnregisterInteractionListener(kvp.Key, kvp.Value);
+            }
+            RegisteredListeners.Clear();
+        }
+
+        static void PruneDestroyedListeners()
+        {
+            List<GameObject> stale = null;
+            foreach (var key in RegisteredListeners.Keys)
+            {
+                if (key == null)
+                {
+                    if (stale == null) stale = new List<GameObject>();
+                    stale.Add(key);
+                }
+            }
+            if (stale != null)
+            {
+                foreach (var key in stale)
+                    RegisteredListeners.Remove(key);
             }
         }
 

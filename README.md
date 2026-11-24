@@ -7,7 +7,7 @@ Vektor is the productized successor to the IntenXion research prototype. IntenXi
 ## Who It Is For
 
 - XR teams that want repeatable PlayMode interaction tests.
-- Agent systems, such as Voqal, that need to emit JSON action plans instead of ad hoc C#.
+- Agent systems, such as Varenna XR, that need to emit JSON action plans instead of ad hoc C#.
 - Unity projects migrating from IntenXion-style helper tests to a schema-first runtime.
 
 ## Install
@@ -167,7 +167,7 @@ Every generated action should choose a driver mode:
 - `XRInteractionManager`: interaction through XR Interaction Toolkit managers, interactors, and interactables.
 - `XRDeviceSimulatorKeyboard`: compatibility path for scenes driven by Unity's XR Device Simulator keyboard controls.
 
-Legacy plans that use `parameters.keyboardFallback` still work. New Voqal-generated plans should use `driverMode` directly.
+Legacy plans that use `parameters.keyboardFallback` still work. New agent-generated plans should use `driverMode` directly.
 
 ## Stable Object References
 

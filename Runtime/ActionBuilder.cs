@@ -1,6 +1,7 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
-using Newtonsoft.Json;
+using System.Globalization;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -97,7 +98,7 @@ namespace Vektor
                 var action = New(XrActionKind.MoveController, m_CurrentTarget, m_CurrentController);
                 action.driverMode = XrDriverMode.XRDeviceSimulatorKeyboard;
                 action.parameters["delta"] = VectorToString(delta);
-                action.parameters["duration"] = duration.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                action.parameters["duration"] = FormatFloat(duration);
                 action.parameters["keyFallback"] = movementKey.ToString();
                 Add(action);
             }
@@ -106,7 +107,7 @@ namespace Vektor
                 var action = New(XrActionKind.RotateController, m_CurrentTarget, m_CurrentController);
                 action.driverMode = XrDriverMode.XRDeviceSimulatorKeyboard;
                 action.parameters["eulerDelta"] = VectorToString(euler);
-                action.parameters["duration"] = duration.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                action.parameters["duration"] = FormatFloat(duration);
                 action.parameters["keyFallback"] = movementKey.ToString();
                 Add(action);
             }
@@ -114,7 +115,7 @@ namespace Vektor
             {
                 var action = New(XrActionKind.Wait, null, null);
                 action.driverMode = XrDriverMode.XRDeviceSimulatorKeyboard;
-                action.parameters["duration"] = duration.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                action.parameters["duration"] = FormatFloat(duration);
                 action.parameters["keyFallback"] = movementKey.ToString();
                 Add(action);
             }
@@ -138,9 +139,9 @@ namespace Vektor
             m_CurrentTarget = target;
             var action = New(XrActionKind.NavigateTo, target, player);
             action.driverMode = XrDriverMode.DirectTransform;
-            action.parameters["moveSpeed"] = moveSpeed.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            action.parameters["interactionAngle"] = interactionAngle.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            action.parameters["interactionDistance"] = interactionDistance.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            action.parameters["moveSpeed"] = FormatFloat(moveSpeed);
+            action.parameters["interactionAngle"] = FormatFloat(interactionAngle);
+            action.parameters["interactionDistance"] = FormatFloat(interactionDistance);
             Add(action);
             return this;
         }
@@ -177,25 +178,21 @@ namespace Vektor
         public ActionBuilder Wait(float duration)
         {
             var action = New(XrActionKind.Wait, null, null);
-            action.parameters["duration"] = duration.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            action.parameters["duration"] = FormatFloat(duration);
             Add(action);
             return this;
         }
 
         public IEnumerator Execute()
         {
-            Debug.Log($"ActionBuilder: Executing {m_Plan.actions.Count} typed actions");
-            yield return m_Runner.Execute(m_Plan);
-            if (m_Runner.LastResult != null && !m_Runner.LastResult.Succeeded)
-                throw new System.Exception(JsonConvert.SerializeObject(m_Runner.LastResult, Formatting.Indented));
-            Debug.Log("ActionBuilder: All actions completed");
+            yield return ExecutePlan(m_Plan);
         }
 
         public IEnumerator ExecutePlan(XrActionPlan plan)
         {
             yield return m_Runner.Execute(plan);
             if (m_Runner.LastResult != null && !m_Runner.LastResult.Succeeded)
-                throw new System.Exception(JsonConvert.SerializeObject(m_Runner.LastResult, Formatting.Indented));
+                throw new Exception(m_Runner.LastResult.ToJson());
         }
 
         public IEnumerator ExecuteJson(string json)
@@ -250,9 +247,11 @@ namespace Vektor
             }
         }
 
+        static string FormatFloat(float value) => value.ToString(CultureInfo.InvariantCulture);
+
         static string VectorToString(Vector3 value)
         {
-            return string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0},{1},{2}", value.x, value.y, value.z);
+            return string.Format(CultureInfo.InvariantCulture, "{0},{1},{2}", value.x, value.y, value.z);
         }
     }
 }
