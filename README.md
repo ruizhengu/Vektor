@@ -1,8 +1,14 @@
-# Vektor
+<p align="center">
+  <img src="assets/social-preview.png" alt="Stagecraft — Playwright for XR" width="720" />
+</p>
 
-Vektor is a deterministic XR action runtime for Unity. It gives autonomous XR test agents a small, structured way to drive scenes: resolve objects, execute actions, record observations, run assertions, handle timeouts, and return machine-readable results.
+# Stagecraft
 
-Vektor is the productized successor to the IntenXion research prototype. IntenXion stays useful as an archived Unity sample project; Vektor is the clean package that new projects should depend on.
+**Playwright for XR** — deterministic PlayMode action runtime and JSON plan runner for Unity XR.
+
+Stagecraft gives XR teams and autonomous test agents a small, structured runtime to drive Unity XR scenes: resolve objects by stable ID, execute deterministic actions, record XRI observations, run assertions, handle timeouts, and return machine-readable results.
+
+Stagecraft (formerly Vektor) is the productized successor to the IntenXion research prototype. IntenXion stays useful as an archived Unity sample project; Stagecraft is the clean UPM package that new projects should depend on.
 
 ## Who It Is For
 
