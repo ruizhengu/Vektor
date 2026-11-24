@@ -2,7 +2,7 @@
   "name": "com.ruizhengu.vektor",
   "version": "0.1.0",
   "displayName": "Vektor",
-  "description": "Deterministic XR action runtime for Unity and Voqal-generated action plans.",
+  "description": "Deterministic XR action runtime for Unity PlayMode tests and autonomous XR test agents.",
   "unity": "6000.0",
   "author": {
     "name": "Ruizhen Gu"
