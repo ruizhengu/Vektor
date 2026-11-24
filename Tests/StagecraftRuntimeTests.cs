@@ -74,8 +74,9 @@ namespace Stagecraft
             }
         }
 
-        [Test]
-        public void ResolverPrefersStableStagecraftId()
+        [TestCase("stagecraftId")]
+        [TestCase("vektorId")]
+        public void ResolverPrefersStableIdOverName(string idField)
         {
             var first = new GameObject("Duplicate");
             var second = new GameObject("Duplicate");
@@ -88,34 +89,8 @@ namespace Stagecraft
 
                 var resolved = new ObjectResolver().Resolve(new XrObjectRef
                 {
-                    stagecraftId = secondId.Id,
-                    name = "Duplicate"
-                });
-
-                Assert.AreSame(second, resolved);
-            }
-            finally
-            {
-                Object.DestroyImmediate(first);
-                Object.DestroyImmediate(second);
-            }
-        }
-
-        [Test]
-        public void ResolverFallsBackToLegacyVektorId()
-        {
-            var first = new GameObject("Duplicate");
-            var second = new GameObject("Duplicate");
-            try
-            {
-                var firstId = first.AddComponent<StagecraftId>();
-                firstId.EnsureId();
-                var secondId = second.AddComponent<StagecraftId>();
-                secondId.EnsureId();
-
-                var resolved = new ObjectResolver().Resolve(new XrObjectRef
-                {
-                    vektorId = secondId.Id,
+                    stagecraftId = idField == "stagecraftId" ? secondId.Id : null,
+                    vektorId = idField == "vektorId" ? secondId.Id : null,
                     name = "Duplicate"
                 });
 

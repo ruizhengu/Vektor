@@ -41,10 +41,21 @@ namespace Stagecraft
     public class XrObjectRef
     {
         public string stagecraftId;
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
         public string vektorId;
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
         public string intenXionId;
         public string scenePath;
         public string name;
+
+        public string GetStableId()
+        {
+            if (!string.IsNullOrEmpty(stagecraftId))
+                return stagecraftId;
+            if (!string.IsNullOrEmpty(vektorId))
+                return vektorId;
+            return intenXionId;
+        }
 
         public static XrObjectRef FromGameObject(GameObject obj)
         {
@@ -88,7 +99,9 @@ namespace Stagecraft
     [Serializable]
     public class XrActionPlan
     {
-        public int schemaVersion = 1;
+        public const int CurrentSchemaVersion = 1;
+
+        public int schemaVersion = CurrentSchemaVersion;
         public string planId = Guid.NewGuid().ToString("N");
         public List<XrActionSpec> actions = new List<XrActionSpec>();
 
@@ -97,11 +110,16 @@ namespace Stagecraft
             var plan = JsonConvert.DeserializeObject<XrActionPlan>(json);
             if (plan == null)
                 throw new ArgumentException("Action plan JSON did not contain a valid plan.");
-            if (plan.schemaVersion != 1)
-                throw new NotSupportedException($"Unsupported Stagecraft action schema version {plan.schemaVersion}.");
+            if (plan.schemaVersion != CurrentSchemaVersion)
+                throw new NotSupportedException(UnsupportedSchemaMessage(plan.schemaVersion));
             if (plan.actions == null)
                 plan.actions = new List<XrActionSpec>();
             return plan;
+        }
+
+        public static string UnsupportedSchemaMessage(int version)
+        {
+            return $"Unsupported Stagecraft action schema version {version}.";
         }
 
         public string ToJson()
@@ -196,11 +214,7 @@ namespace Stagecraft
             if (reference == null)
                 return null;
 
-            var stableId = !string.IsNullOrEmpty(reference.stagecraftId)
-                ? reference.stagecraftId
-                : !string.IsNullOrEmpty(reference.vektorId)
-                    ? reference.vektorId
-                    : reference.intenXionId;
+            var stableId = reference.GetStableId();
             if (!string.IsNullOrEmpty(stableId))
             {
                 var byId = FindById(stableId);
@@ -753,10 +767,10 @@ namespace Stagecraft
                 yield break;
             }
 
-            if (plan.schemaVersion != 1)
+            if (plan.schemaVersion != XrActionPlan.CurrentSchemaVersion)
             {
                 LastResult.status = XrActionStatus.Failed;
-                LastResult.warnings.Add($"Unsupported Stagecraft action schema version {plan.schemaVersion}.");
+                LastResult.warnings.Add(XrActionPlan.UnsupportedSchemaMessage(plan.schemaVersion));
                 yield break;
             }
 
@@ -1085,7 +1099,7 @@ namespace Stagecraft
     }
 
 #if UNITY_EDITOR
-    public static class StagecraftIdSeeder
+    public static class IdSeeder
     {
         [UnityEditor.MenuItem("Tools/Stagecraft/Seed Missing IDs")]
         public static void SeedMissingIds()
